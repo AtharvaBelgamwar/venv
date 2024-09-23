@@ -15,7 +15,7 @@ def create_app():
     CORS(app, supports_credentials=True, resources={r"/*": {
         "origins": "https://monxspense.vercel.app/",
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "allow_headers": ["Content-Type","Authorization"]
     }})
 
     # Set secret key
