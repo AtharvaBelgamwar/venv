@@ -95,9 +95,9 @@ def create_auth_blueprint(oauth):
         total_balance = existing_user.get("total_balance", 0)
         if total_balance is None or total_balance == 0:
             # Redirect the user to set balance if the balance is not set or is 0
-            return redirect('http://localhost:3000/set_balance')
+            return redirect('https://monxspense.vercel.app//set_balance')
 
-        return redirect('http://localhost:3000/main')
+        return redirect('https://monxspense.vercel.app//main')
     @auth_blueprint.route('/set_balance', methods=['POST','OPTIONS'])
     def set_balance():
         if request.method=='OPTIONS':
@@ -133,7 +133,7 @@ def create_auth_blueprint(oauth):
     @auth_blueprint.route('/logout')
     def logout():
         session.pop('user', None)
-        return redirect('http://localhost:3000/sign_in')
+        return redirect('https://monxspense.vercel.app//sign_in')
 
     @auth_blueprint.route('/user')
     def user():
