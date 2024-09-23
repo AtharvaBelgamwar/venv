@@ -3,3 +3,4 @@ bson
 google-generativeai
 pymongo
 authlib
+flask-cors
