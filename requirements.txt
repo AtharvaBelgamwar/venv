@@ -1,6 +1,7 @@
-flask
+Flask==2.3.2
+Flask-Cors==3.0.10
+pymongo==4.0.2  # Ensure you use a stable version without async conflicts
+authlib==1.1.0  # For OAuth
+python-dotenv==1.0.0  # For environment variable management
+gunicorn==20.1.0  # Production WSGI server
 bson
-google-generativeai
-pymongo
-authlib
-flask-cors
