@@ -13,7 +13,7 @@ def create_app():
     
     # Set up CORS
     CORS(app, supports_credentials=True, resources={r"/*": {
-        "origins": "https://monxspense.vercel.app/",
+        "origins": "https://monxspense.vercel.app",
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type","Authorization"],
         "expose_headers": ["Authorization"],
