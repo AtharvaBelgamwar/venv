@@ -2,8 +2,8 @@ from flask import Blueprint, redirect, url_for, session, current_app, jsonify, r
 import os
 import uuid
 from bson import ObjectId
+import requests
 import google.generativeai as genai
-
 def serialize_objectid(data):
     # Converts ObjectId to a string
     for key, value in data.items():
@@ -13,7 +13,7 @@ def serialize_objectid(data):
 
 def create_auth_blueprint(oauth):
     # Define the blueprint
-    auth_blueprint = Blueprint('auth', __name__, url_prefix='/auth')
+    auth_blueprint = Blueprint('auth', __name__,url_prefix='/auth')
 
     # Manually specify Google's JWKS URI
     jwks_uri = 'https://www.googleapis.com/oauth2/v3/certs'
@@ -47,7 +47,7 @@ def create_auth_blueprint(oauth):
     @auth_blueprint.route('/callback')
     def auth_callback():
         token = oauth.google.authorize_access_token()
-
+        
         # Retrieve the nonce from the session
         nonce = session.get('nonce')
 
@@ -57,7 +57,7 @@ def create_auth_blueprint(oauth):
         # Parse the ID token, passing the nonce for verification
         user_info = oauth.google.parse_id_token(token, nonce=nonce)
         if 'name' not in user_info:
-            user_info['name'] = user_info.get('email', 'Anonymous')
+            user_info['name'] = user_info.get('email', 'Anonymous') 
 
         # Store user info in session
         session['user'] = user_info
@@ -98,12 +98,10 @@ def create_auth_blueprint(oauth):
             return redirect('https://monxspense.vercel.app/set_balance')
 
         return redirect('https://monxspense.vercel.app/main')
-
-    @auth_blueprint.route('/set_balance', methods=['POST', 'OPTIONS'])
+    @auth_blueprint.route('/set_balance', methods=['POST','OPTIONS'])
     def set_balance():
-        if request.method == 'OPTIONS':
-            return '', 204  # Respond to preflight request
-
+        if request.method=='OPTIONS':
+            return '',204
         # Check if the user is logged in
         user = session.get('user')
         if not user:
@@ -131,19 +129,14 @@ def create_auth_blueprint(oauth):
         else:
             return jsonify({"error": "User not found"}), 404
 
-    @auth_blueprint.route('/logout', methods=['POST', 'OPTIONS'])
-    def logout():
-        if request.method == 'OPTIONS':
-            return '', 204  # Respond to preflight request
 
+    @auth_blueprint.route('/logout')
+    def logout():
         session.pop('user', None)
         return redirect('https://monxspense.vercel.app/sign_in')
 
-    @auth_blueprint.route('/user', methods=['GET', 'OPTIONS'])
+    @auth_blueprint.route('/user')
     def user():
-        if request.method == 'OPTIONS':
-            return '', 204  # Respond to preflight request
-
         user = session.get('user')
         if user:
             db = current_app.config['db']
@@ -151,7 +144,7 @@ def create_auth_blueprint(oauth):
             user_data = db.users.find_one({"email": user["email"]})
             if user_data:
                 # Check if total_balance is set
-                user_data = serialize_objectid(user_data)
+                user_data=serialize_objectid(user_data)
                 if 'total_balance' not in user_data:
                     return jsonify({"user": user_data, "needs_balance": True})  # Notify frontend that balance is needed
                 return jsonify({"user": user_data, "needs_balance": False})
@@ -159,11 +152,8 @@ def create_auth_blueprint(oauth):
         return jsonify({'error': 'Not logged in'}), 401
 
     # Test MongoDB connection
-    @auth_blueprint.route('/test_db', methods=['GET', 'OPTIONS'])
+    @auth_blueprint.route('/test_db')
     def test_db():
-        if request.method == 'OPTIONS':
-            return '', 204  # Respond to preflight request
-
         db = current_app.config['db']  # Access MongoDB from the app config
         try:
             # List the databases in MongoDB to check the connection
@@ -171,13 +161,12 @@ def create_auth_blueprint(oauth):
             return jsonify({"message": "Connected to MongoDB", "databases": db_list})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
     @auth_blueprint.route('/add_balance', methods=['POST', 'OPTIONS'])
     def add_balance():
         if request.method == 'OPTIONS':
             # Respond to the preflight request
             return '', 204
-
+        
         # Check if the user is logged in
         user = session.get('user')
         if not user:
@@ -204,12 +193,8 @@ def create_auth_blueprint(oauth):
             return jsonify({"message": "Balance updated successfully"}), 200
         else:
             return jsonify({"error": "User not found"}), 404
-
-    @auth_blueprint.route('/add_transaction', methods=['POST', 'OPTIONS'])
+    @auth_blueprint.route('/add_transaction', methods=['POST'])
     def add_transaction():
-        if request.method == 'OPTIONS':
-            return '', 204  # Respond to preflight request
-
         # Check if the user is logged in
         user = session.get('user')
         if not user:
@@ -262,12 +247,10 @@ def create_auth_blueprint(oauth):
             )
 
         return jsonify({"message": "Transaction added successfully", "transaction": new_transaction}), 200
+  # Ensure that you have this imported for making the API request.
 
-    @auth_blueprint.route('/send_to_gemini', methods=['POST', 'OPTIONS'])
+    @auth_blueprint.route('/send_to_gemini', methods=['POST'])
     def send_to_gemini():
-        if request.method == 'OPTIONS':
-            return '', 204  # Respond to preflight request
-
         try:
             # Get the user's query from the request
             data = request.json
@@ -275,7 +258,9 @@ def create_auth_blueprint(oauth):
 
             # Call the Gemini API to generate text
             model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(user_query)
+            response = model.generate_content(
+               user_query
+            )
 
             # Extract the response text
             ai_response = response.text
@@ -285,9 +270,9 @@ def create_auth_blueprint(oauth):
         except Exception as e:
             print(f"Error interacting with Gemini API: {e}")
             return jsonify({'error': 'Failed to communicate with Gemini API'}), 500
-
     def reset_conversation():
         session.pop('conversation_history', None)  # Remove conversation history from session
         return jsonify({'message': 'Conversation history reset successfully'}), 200
 
     return auth_blueprint
+
