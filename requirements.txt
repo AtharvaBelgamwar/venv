@@ -1,0 +1,5 @@
+flask
+bson
+google-generativeai
+pymongo
+authlib
