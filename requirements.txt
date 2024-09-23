@@ -4,4 +4,3 @@ pymongo==4.5.0
 authlib==1.1.0
 python-dotenv==1.0.0
 gunicorn==20.1.0
-bson==0.5.10
