@@ -5,4 +5,4 @@ app = create_app()
 
 # Run the Flask development server
 if __name__ == '__main__':
-    app.run(debug=True,host='0.0.0.0')  # 'debug=True' enables auto-reload during development
+    app.run(debug=True)  # 'debug=True' enables auto-reload during development

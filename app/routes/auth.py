@@ -4,8 +4,12 @@ import uuid
 from bson import ObjectId
 import requests
 import google.generativeai as genai
+
+from dotenv import load_dotenv
+load_dotenv()
+
+# Helper function to convert ObjectId to string
 def serialize_objectid(data):
-    # Converts ObjectId to a string
     for key, value in data.items():
         if isinstance(value, ObjectId):
             data[key] = str(value)
@@ -13,7 +17,7 @@ def serialize_objectid(data):
 
 def create_auth_blueprint(oauth):
     # Define the blueprint
-    auth_blueprint = Blueprint('auth', __name__,url_prefix='/auth')
+    auth_blueprint = Blueprint('auth', __name__, url_prefix='/auth')
 
     # Manually specify Google's JWKS URI
     jwks_uri = 'https://www.googleapis.com/oauth2/v3/certs'
@@ -26,10 +30,10 @@ def create_auth_blueprint(oauth):
         authorize_url='https://accounts.google.com/o/oauth2/auth',
         access_token_url='https://accounts.google.com/o/oauth2/token',
         userinfo_endpoint='https://www.googleapis.com/oauth2/v3/userinfo',
-        jwks_uri=jwks_uri,  # Manually specify the JWKS URI
+        jwks_uri=jwks_uri,
         client_kwargs={
             'scope': 'openid profile email',
-            'prompt': 'select_account'  # Force account selection
+            'prompt': 'select_account'
         },
     )
 
@@ -40,14 +44,15 @@ def create_auth_blueprint(oauth):
         session['nonce'] = nonce
 
         redirect_uri = url_for('auth.auth_callback', _external=True)
-        print(redirect_uri)
+        print(f"Redirect URI: {redirect_uri}")
+
         # Pass the nonce when authorizing the redirect
         return oauth.google.authorize_redirect(redirect_uri, nonce=nonce)
 
     @auth_blueprint.route('/callback')
     def auth_callback():
         token = oauth.google.authorize_access_token()
-        
+
         # Retrieve the nonce from the session
         nonce = session.get('nonce')
 
@@ -57,7 +62,7 @@ def create_auth_blueprint(oauth):
         # Parse the ID token, passing the nonce for verification
         user_info = oauth.google.parse_id_token(token, nonce=nonce)
         if 'name' not in user_info:
-            user_info['name'] = user_info.get('email', 'Anonymous') 
+            user_info['name'] = user_info.get('email', 'Anonymous')
 
         # Store user info in session
         session['user'] = user_info
@@ -67,57 +72,47 @@ def create_auth_blueprint(oauth):
         existing_user = db.users.find_one({"email": user_info["email"]})
 
         if not existing_user:
-            # Insert the user if not already in the database
             db.users.insert_one({
                 "name": user_info["name"],
                 "email": user_info["email"],
                 "profile_picture": user_info.get("picture"),
                 "last_login": user_info.get("iat"),
-                "total_balance": 0,  # Set balance to None initially
-                "transactions": []  # Add empty transactions list
+                "total_balance": 0,  # New user starts with 0 balance
+                "transactions": []
             })
-            print(f"New user added: {user_info}")  # Log new user details to terminal
+            total_balance = 0  # Newly created users will need to set balance
         else:
-            # If user exists, update last login time
             db.users.update_one(
                 {"email": user_info["email"]},
                 {"$set": {"last_login": user_info.get("iat")}}
             )
-            print(f"Existing user found and updated: {existing_user}")  # Log existing user details to terminal
+            total_balance = existing_user.get("total_balance", 0)  # Fallback to 0 if total_balance doesn't exist
 
-            # Now let's check and return the balance and transactions for existing users
-            total_balance = existing_user.get("total_balance", 0)
-            transactions = existing_user.get("transactions", [])
+        # If total_balance is 0 or not set, redirect to set_balance
+        if total_balance == 0:
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+            return redirect(f"{frontend_url}/set_balance")
 
-            print(f"Total balance: {total_balance}")
-            print(f"Transactions: {transactions}")
+        # Otherwise, redirect to main page
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        return redirect(f"{frontend_url}/main")
 
-        total_balance = existing_user.get("total_balance", 0)
-        if total_balance is None or total_balance == 0:
-            # Redirect the user to set balance if the balance is not set or is 0
-            return redirect('https://monxspense.vercel.app/set_balance')
 
-        return redirect('https://monxspense.vercel.app/main')
-    @auth_blueprint.route('/set_balance', methods=['POST','OPTIONS'])
+    @auth_blueprint.route('/set_balance', methods=['POST', 'OPTIONS'])
     def set_balance():
-        if request.method=='OPTIONS':
-            return '',204
-        # Check if the user is logged in
+        if request.method == 'OPTIONS':
+            return '', 204
+        
         user = session.get('user')
         if not user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Parse the incoming JSON data
         data = request.json
         if 'balance' not in data:
             return jsonify({"error": "Missing balance"}), 400
 
         balance = data['balance']
 
-        # Log the incoming balance for debugging
-        print(f"Received balance: {balance} for user: {user['email']}")
-
-        # Update the user's balance in the MongoDB database
         db = current_app.config['db']
         result = db.users.update_one(
             {"email": user['email']},
@@ -129,11 +124,11 @@ def create_auth_blueprint(oauth):
         else:
             return jsonify({"error": "User not found"}), 404
 
-
     @auth_blueprint.route('/logout')
     def logout():
         session.pop('user', None)
-        return redirect('https://monxspense.vercel.app/sign_in')
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        return redirect(f"{frontend_url}/sign_in")
 
     @auth_blueprint.route('/user')
     def user():
@@ -144,7 +139,7 @@ def create_auth_blueprint(oauth):
             user_data = db.users.find_one({"email": user["email"]})
             if user_data:
                 # Check if total_balance is set
-                user_data=serialize_objectid(user_data)
+                user_data = serialize_objectid(user_data)
                 if 'total_balance' not in user_data:
                     return jsonify({"user": user_data, "needs_balance": True})  # Notify frontend that balance is needed
                 return jsonify({"user": user_data, "needs_balance": False})
@@ -161,28 +156,23 @@ def create_auth_blueprint(oauth):
             return jsonify({"message": "Connected to MongoDB", "databases": db_list})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
     @auth_blueprint.route('/add_balance', methods=['POST', 'OPTIONS'])
     def add_balance():
         if request.method == 'OPTIONS':
             # Respond to the preflight request
             return '', 204
         
-        # Check if the user is logged in
         user = session.get('user')
         if not user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Parse the incoming JSON data
         data = request.json
         if 'additional_balance' not in data:
             return jsonify({"error": "Missing balance"}), 400
 
         additional_balance = data['additional_balance']
 
-        # Log the incoming balance for debugging
-        print(f"Received additional balance: {additional_balance} for user: {user['email']}")
-
-        # Update the user's balance in the MongoDB database
         db = current_app.config['db']
         result = db.users.update_one(
             {"email": user['email']},
@@ -193,86 +183,72 @@ def create_auth_blueprint(oauth):
             return jsonify({"message": "Balance updated successfully"}), 200
         else:
             return jsonify({"error": "User not found"}), 404
+
     @auth_blueprint.route('/add_transaction', methods=['POST'])
     def add_transaction():
-        # Check if the user is logged in
         user = session.get('user')
         if not user:
             return jsonify({"error": "Not logged in"}), 401
 
-        # Parse the incoming JSON data
         data = request.json
         amount = data.get('amount')
         description = data.get('description')
         date = data.get('date')
-        recurring = data.get('recurring', False)  # Default to False if not provided
+        recurring = data.get('recurring', False)
 
         if not description or not date or amount is None:
             return jsonify({"error": "Invalid transaction data"}), 400
 
-        # Create a transaction object
         new_transaction = {
-            "id": str(uuid.uuid4()),  # Generate unique ID for the transaction
+            "id": str(uuid.uuid4()),
             "description": description,
             "amount": amount,
             "date": date,
             "recurring": recurring
         }
 
-        # Update the user's transactions in the MongoDB database
         db = current_app.config['db']
         user_data = db.users.find_one({"email": user['email']})
 
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
-        # Add the transaction to the user's transaction list
         db.users.update_one(
             {"email": user['email']},
             {"$push": {"transactions": new_transaction}}
         )
 
-        # Check if the amount is positive or negative
         if amount > 0:
-            # Income: Add the transaction amount to the total balance
             db.users.update_one(
                 {"email": user['email']},
                 {"$inc": {"total_balance": amount}}
             )
         else:
-            # Expense: Subtract the transaction amount from the total balance
             db.users.update_one(
                 {"email": user['email']},
                 {"$inc": {"total_balance": amount}}
             )
 
         return jsonify({"message": "Transaction added successfully", "transaction": new_transaction}), 200
-  # Ensure that you have this imported for making the API request.
 
     @auth_blueprint.route('/send_to_gemini', methods=['POST'])
     def send_to_gemini():
         try:
-            # Get the user's query from the request
             data = request.json
             user_query = data.get('query')
 
-            # Call the Gemini API to generate text
             model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(
-               user_query
-            )
+            response = model.generate_content(user_query)
 
-            # Extract the response text
             ai_response = response.text
-
             return jsonify({'response': ai_response})
 
         except Exception as e:
             print(f"Error interacting with Gemini API: {e}")
             return jsonify({'error': 'Failed to communicate with Gemini API'}), 500
+
     def reset_conversation():
-        session.pop('conversation_history', None)  # Remove conversation history from session
+        session.pop('conversation_history', None)
         return jsonify({'message': 'Conversation history reset successfully'}), 200
 
     return auth_blueprint
-

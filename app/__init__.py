@@ -10,10 +10,13 @@ load_dotenv()
 
 def create_app():
     app = Flask(__name__)
-    
+    app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+    app.config['SESSION_COOKIE_SECURE'] = True  # Set to True if using HTTPS
+
+    frontend_url = os.getenv('FRONTEND_URL','http://localhost:3000')
     # Set up CORS
     CORS(app, supports_credentials=True, resources={r"/*": {
-        "origins": "https://monxspense.vercel.app",
+        "origins": [frontend_url],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type","Authorization"],
         "expose_headers": ["Authorization"],
