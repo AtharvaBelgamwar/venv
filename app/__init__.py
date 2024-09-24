@@ -13,7 +13,7 @@ def create_app():
     app.config['SESSION_COOKIE_SAMESITE'] = 'None'
     app.config['SESSION_COOKIE_SECURE'] = True  # Set to True if using HTTPS
 
-    frontend_url = os.getenv('FRONTEND_URL','http://localhost:3000')
+    frontend_url = os.getenv('FRONTEND_URL','https://monxpense.vercel.app')
     # Set up CORS
     CORS(app, supports_credentials=True, resources={r"/*": {
         "origins": [frontend_url],
