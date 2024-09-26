@@ -8,7 +8,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 load_dotenv()
 
-# Helper function to convert ObjectId to string
+
 def serialize_objectid(data):
     for key, value in data.items():
         if isinstance(value, ObjectId):
@@ -16,13 +16,13 @@ def serialize_objectid(data):
     return data
 
 def create_auth_blueprint(oauth):
-    # Define the blueprint
+    
     auth_blueprint = Blueprint('auth', __name__, url_prefix='/auth')
 
-    # Manually specify Google's JWKS URI
+    
     jwks_uri = 'https://www.googleapis.com/oauth2/v3/certs'
 
-    # Register Google OAuth provider
+    
     oauth.register(
         name='google',
         client_id=os.getenv('GOOGLE_CLIENT_ID'),
@@ -39,36 +39,36 @@ def create_auth_blueprint(oauth):
 
     @auth_blueprint.route('/login')
     def login():
-        # Generate a nonce and store it in the session
+        
         nonce = str(uuid.uuid4())
         session['nonce'] = nonce
 
         redirect_uri = url_for('auth.auth_callback', _external=True)
         print(f"Redirect URI: {redirect_uri}")
 
-        # Pass the nonce when authorizing the redirect
+        
         return oauth.google.authorize_redirect(redirect_uri, nonce=nonce)
 
     @auth_blueprint.route('/callback')
     def auth_callback():
         token = oauth.google.authorize_access_token()
 
-        # Retrieve the nonce from the session
+        
         nonce = session.get('nonce')
 
         if not nonce:
             return jsonify({'error': 'Nonce not found in session'}), 400
 
-        # Parse the ID token, passing the nonce for verification
+        
         user_info = oauth.google.parse_id_token(token, nonce=nonce)
         if 'name' not in user_info:
             user_info['name'] = user_info.get('email', 'Anonymous')
 
-        # Store user info in session
+        
         session['user'] = user_info
 
-        # Save user to MongoDB
-        db = current_app.config['db']  # Access MongoDB from app config
+        
+        db = current_app.config['db']  
         existing_user = db.users.find_one({"email": user_info["email"]})
 
         if not existing_user:
@@ -77,23 +77,23 @@ def create_auth_blueprint(oauth):
                 "email": user_info["email"],
                 "profile_picture": user_info.get("picture"),
                 "last_login": user_info.get("iat"),
-                "total_balance": 0,  # New user starts with 0 balance
+                "total_balance": 0,  
                 "transactions": []
             })
-            total_balance = 0  # Newly created users will need to set balance
+            total_balance = 0 
         else:
             db.users.update_one(
                 {"email": user_info["email"]},
                 {"$set": {"last_login": user_info.get("iat")}}
             )
-            total_balance = existing_user.get("total_balance", 0)  # Fallback to 0 if total_balance doesn't exist
+            total_balance = existing_user.get("total_balance", 0)  
 
-        # If total_balance is 0 or not set, redirect to set_balance
+        
         if total_balance == 0:
             frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
             return redirect(f"{frontend_url}/set_balance")
 
-        # Otherwise, redirect to main page
+        
         frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
         return redirect(f"{frontend_url}/main")
 
@@ -135,23 +135,23 @@ def create_auth_blueprint(oauth):
         user = session.get('user')
         if user:
             db = current_app.config['db']
-            # Fetch the user from the database
+            
             user_data = db.users.find_one({"email": user["email"]})
             if user_data:
-                # Check if total_balance is set
+                
                 user_data = serialize_objectid(user_data)
                 if 'total_balance' not in user_data:
-                    return jsonify({"user": user_data, "needs_balance": True})  # Notify frontend that balance is needed
+                    return jsonify({"user": user_data, "needs_balance": True})  
                 return jsonify({"user": user_data, "needs_balance": False})
             return jsonify({"error": "User not found"}), 404
         return jsonify({'error': 'Not logged in'}), 401
 
-    # Test MongoDB connection
+    
     @auth_blueprint.route('/test_db')
     def test_db():
-        db = current_app.config['db']  # Access MongoDB from the app config
+        db = current_app.config['db']  
         try:
-            # List the databases in MongoDB to check the connection
+            
             db_list = db.client.list_database_names()
             return jsonify({"message": "Connected to MongoDB", "databases": db_list})
         except Exception as e:
@@ -160,7 +160,7 @@ def create_auth_blueprint(oauth):
     @auth_blueprint.route('/add_balance', methods=['POST', 'OPTIONS'])
     def add_balance():
         if request.method == 'OPTIONS':
-            # Respond to the preflight request
+            
             return '', 204
         
         user = session.get('user')
